@@ -55,6 +55,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nicolascarmona.paytrack.PayTrackItem
 import com.nicolascarmona.paytrack.PayTrackViewModel
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.format.TextStyle
 import java.util.Locale
 
@@ -66,7 +67,7 @@ fun PayTrackScreen(
 ) {
 
     val subscriptionList by payTrackViewModel.subscriptions.collectAsStateWithLifecycle()
-//    val totalMonth by payTrackViewModel.totalSpent.collectAsStateWithLifecycle()
+    val totalMonth by payTrackViewModel.totalSpent.collectAsStateWithLifecycle()
 
     var name by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
@@ -284,18 +285,18 @@ fun MyCalendar(
     onDayClick: (Int) -> Unit
 ) {
     var actualDate by remember { mutableStateOf(LocalDate.now()) }
-//    val monthDay = actualDate.dayOfMonth
-//    val dayName = actualDate.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
+    val monthDay = actualDate.dayOfMonth
+    val dayName = actualDate.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
     val month = actualDate.monthValue
     val monthName = actualDate.month.getDisplayName(TextStyle.FULL, Locale.getDefault())
     val totalMonthDays = actualDate.lengthOfMonth()
     val year = actualDate.year
     //
-//    val maxMonthDays = YearMonth.of(year, month).lengthOfMonth()
+    val maxMonthDays = YearMonth.of(year, month).lengthOfMonth()
     val firstMonthDay = LocalDate.of(year, month, 1)
     val numberWeekDay = firstMonthDay.dayOfWeek.value
 
-//    var firstDayCalendar by remember { mutableStateOf("") }
+    var firstDayCalendar by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -304,8 +305,6 @@ fun MyCalendar(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-
-
         val weekDaysNameList = mutableListOf("L", "M", "X", "J", "V", "S", "D")
 
         for (i in 1 until numberWeekDay) {
@@ -332,8 +331,6 @@ fun MyCalendar(
                 Text("+")
             }
         }
-
-
     }
 }
 
