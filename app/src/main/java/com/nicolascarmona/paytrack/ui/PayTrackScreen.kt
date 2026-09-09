@@ -4,12 +4,14 @@ import android.annotation.SuppressLint
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,15 +24,23 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.KeyboardDoubleArrowLeft
+import androidx.compose.material.icons.filled.KeyboardDoubleArrowRight
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FabPosition
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -44,8 +54,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -54,10 +66,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nicolascarmona.paytrack.PayTrackItem
 import com.nicolascarmona.paytrack.PayTrackViewModel
+import com.nicolascarmona.paytrack.TimeUnit
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.TextStyle
 import java.util.Locale
+import kotlin.math.max
 
 @RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
@@ -69,28 +83,52 @@ fun PayTrackScreen(
     val subscriptionList by payTrackViewModel.subscriptions.collectAsStateWithLifecycle()
     val totalMonth by payTrackViewModel.totalSpent.collectAsStateWithLifecycle()
 
+    var actualDate by remember { mutableStateOf(LocalDate.now()) }
+    val currentMaxMonthDays = actualDate.lengthOfMonth()
+
+    val effectiveSubscriptionList = subscriptionList.map { item ->
+        item.copy(day = minOf(item.day, currentMaxMonthDays))
+    }
+
+    val paymentDays = effectiveSubscriptionList.map { it.day }.distinct()
+
     var name by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
     var dayStr by remember { mutableStateOf("") }
     var priceStr by remember { mutableStateOf("") }
+    var frequencyStr by remember { mutableStateOf("1") }
+    var timeUnit by remember { mutableStateOf(TimeUnit.MONTH) }
 
     var showAddDialog by remember { mutableStateOf(false) }
     var showDayDialog by remember { mutableStateOf(false) }
 
-    val closeAndClearDialog = {
-        showAddDialog = false
-        name = ""
-        description = ""
-        dayStr = ""
-        priceStr = ""
-    }
 
     var selectedDay by remember { mutableStateOf<Int?>(null) }
 
     val displayedSubscriptions = if (selectedDay != null) {
-        subscriptionList.filter { it.day == selectedDay }
+        effectiveSubscriptionList.filter { it.day == selectedDay }
     } else {
-        subscriptionList
+        effectiveSubscriptionList
+    }
+
+    val colorList = listOf(
+        // Primera fila
+        Color(0xFFF44336), Color(0xFFE91E63), Color(0xFF9C27B0), Color(0xFF673AB7),
+        Color(0xFF3F51B5), Color(0xFF2196F3), Color(0xFF03A9F4), Color(0xFF00BCD4),
+        // Segunda fila
+        Color(0xFF009688), Color(0xFF4CAF50), Color(0xFF8BC34A), Color(0xFFCDDC39),
+        Color(0xFFFFEB3B), Color(0xFFFFC107), Color(0xFFFF9800), Color(0xFFFF5722)
+    )
+
+    var selectedColor by remember { mutableStateOf(colorList[0]) }
+
+    val closeAndClearDialog = {
+        showAddDialog = false
+        name = ""
+        dayStr = ""
+        priceStr = ""
+        selectedColor = colorList[0]
+        frequencyStr = "1"
+        timeUnit = TimeUnit.MONTH
     }
 
     Scaffold(
@@ -123,14 +161,19 @@ fun PayTrackScreen(
             MyDialog(
                 name = name,
                 onNameChange = { name = it },
-                description = description,
-                onDescriptionChange = { description = it },
                 dayStr = dayStr,
                 onDayStrChange = { dayStr = it },
                 priceStr = priceStr,
                 onPriceStrChange = { priceStr = it },
                 onDismiss = closeAndClearDialog,
-                payTrackViewModel = payTrackViewModel
+                payTrackViewModel = payTrackViewModel,
+                selectedColor = selectedColor,
+                onColorChange = { selectedColor = it },
+                colorList = colorList,
+                frequencyStr = frequencyStr,
+                onFrequencyChange = { frequencyStr = it },
+                timeUnit = timeUnit,
+                onTimeUnitChange = { timeUnit = it },
             )
         }
         if (showDayDialog && selectedDay != null) {
@@ -149,7 +192,10 @@ fun PayTrackScreen(
                 .padding(innerPadding)
         ) {
             MyCalendar(
-                onDayClick = { dayClicked ->
+                actualDate = actualDate,
+                paymentDays = paymentDays,
+                onMonthChange = { newDate -> actualDate = newDate },
+                onDayClick = { dayClicked, maxDays ->
                     selectedDay = dayClicked
                     showDayDialog = true
                 }
@@ -157,7 +203,7 @@ fun PayTrackScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            Payments(items = subscriptionList)
+            Payments(items = effectiveSubscriptionList)
         }
     }
 }
@@ -165,45 +211,79 @@ fun PayTrackScreen(
 @SuppressLint("DefaultLocale")
 @Composable
 fun Payments(items: List<PayTrackItem>) {
+
+    val sortedItems = items.sortedWith(compareBy({ it.day }, { it.price }))
+
     LazyColumn(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items(items, key = { it.id }) { item ->
-            Card(modifier = Modifier.fillMaxWidth()) {
+        items(sortedItems, key = { it.id }) { item ->
+
+            val isLightBackground = item.color.luminance() > 0.5f
+            val textColor = if (isLightBackground) Color.Black else Color.White
+
+            val repeatText = if (item.frequency == 1) {
+                "Cada ${item.timeUnit.labelSingular.lowercase()}"
+            } else {
+                "Cada ${item.frequency} ${item.timeUnit.labelPlural.lowercase()}"
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = item.color
+                )
+            ) {
                 Row(
                     modifier = Modifier.padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
-                        Text(item.name, fontWeight = FontWeight.Bold)
+                        Text(item.name, fontWeight = FontWeight.Bold, color = textColor)
                         Text(
-                            "Día de cobro: ${item.day}",
-                            style = MaterialTheme.typography.bodySmall
+                            "Día de cobro: ${item.day} ($repeatText)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = textColor.copy(alpha = 0.8f)
                         )
                     }
-                    Text(String.format("%-2f €", item.price), fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text(
+                        String.format("%.2f €", item.price),
+                        fontWeight = FontWeight.Bold,
+                        color = textColor
+                    )
                 }
             }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MyDialog(
     name: String,
     onNameChange: (String) -> Unit,
-    description: String,
-    onDescriptionChange: (String) -> Unit,
     dayStr: String,
     onDayStrChange: (String) -> Unit,
     priceStr: String,
     onPriceStrChange: (String) -> Unit,
+    frequencyStr: String,
+    onFrequencyChange: (String) -> Unit,
+    timeUnit: TimeUnit,
+    onTimeUnitChange: (TimeUnit) -> Unit,
     onDismiss: () -> Unit,
-    payTrackViewModel: PayTrackViewModel = viewModel()
+    payTrackViewModel: PayTrackViewModel = viewModel(),
+    selectedColor: Color,
+    onColorChange: (Color) -> Unit,
+    colorList: List<Color>
 ) {
+
+    var expanded by remember { mutableStateOf(false) }
+
     Dialog(onDismissRequest = onDismiss) {
         Card {
             Column(modifier = Modifier.padding(16.dp)) {
@@ -211,14 +291,6 @@ fun MyDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = onNameChange,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Text("Descripción")
-                OutlinedTextField(
-                    value = description,
-                    onValueChange = onDescriptionChange,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(10.dp))
@@ -243,6 +315,85 @@ fun MyDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth()
                 )
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Text("Se repite cada:")
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = frequencyStr,
+                        onValueChange = {
+                            if (it.isEmpty() || it.all { char -> char.isDigit() }) onFrequencyChange(
+                                it
+                            )
+                        },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f) // Ocupa menos espacio
+                    )
+
+                    ExposedDropdownMenuBox(
+                        expanded = expanded,
+                        onExpandedChange = { expanded = !expanded },
+                        modifier = Modifier.weight(2f) // Ocupa el doble de espacio
+                    ) {
+                        val isPlural = (frequencyStr.toIntOrNull() ?: 0) != 1
+
+                        OutlinedTextField(
+                            value = if (isPlural) timeUnit.labelPlural else timeUnit.labelSingular,
+                            onValueChange = {},
+                            readOnly = true,
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                            modifier = Modifier
+                                .menuAnchor()
+                                .fillMaxWidth()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false }
+                        ) {
+                            TimeUnit.entries.forEach { option ->
+                                DropdownMenuItem(
+                                    text = { Text(if (isPlural) option.labelPlural else option.labelSingular) },
+                                    onClick = {
+                                        onTimeUnitChange(option)
+                                        expanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Text("Color identificativo")
+                Spacer(modifier = Modifier.height(8.dp))
+
+                LazyVerticalGrid(
+                    // Crea celdas de un tamaño mínimo, ajustando las columnas automáticamente
+                    columns = GridCells.Adaptive(minSize = 36.dp),
+                    modifier = Modifier.height(100.dp), // Altura fija para el contenedor de la cuadrícula
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(colorList) { color ->
+                        Box(
+                            modifier = Modifier
+                                .aspectRatio(1f) // Fuerza a que sean cuadrados perfectos
+                                .clip(RoundedCornerShape(8.dp)) // Bordes redondeados como en la imagen
+                                .background(color)
+                                .clickable { onColorChange(color) }
+                                .border(
+                                    width = if (selectedColor == color) 3.dp else 0.dp,
+                                    color = if (selectedColor == color) MaterialTheme.colorScheme.onSurface else Color.Transparent,
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(10.dp))
 
@@ -255,23 +406,21 @@ fun MyDialog(
                     Button(onClick = onDismiss) { Text("Atrás") }
                     Spacer(modifier = Modifier.width(10.dp))
 
+                    val freqInt = frequencyStr.toIntOrNull() ?: 1
+
                     Button(
                         onClick = {
                             payTrackViewModel.addSubscription(
                                 name = name,
-                                description = description,
+                                frequency = freqInt,
+                                timeUnit = timeUnit,
                                 day = dayInt,
-                                price = priceFloat
+                                price = priceFloat,
+                                color = selectedColor
                             )
-
                             onDismiss()
                         },
-                        enabled = if (
-                            name.isNotBlank() &&
-                            description.isNotBlank() &&
-                            dayInt in 1..31 &&
-                            priceFloat > 0f
-                        ) true else false
+                        enabled = name.isNotBlank() && freqInt > 0 && dayInt in 1..31 && priceFloat > 0f
                     ) { Text("Guardar") }
                 }
             }
@@ -282,9 +431,11 @@ fun MyDialog(
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun MyCalendar(
-    onDayClick: (Int) -> Unit
+    actualDate: LocalDate,
+    paymentDays: List<Int>,
+    onMonthChange: (LocalDate) -> Unit,
+    onDayClick: (Int, Int) -> Unit
 ) {
-    var actualDate by remember { mutableStateOf(LocalDate.now()) }
     val monthDay = actualDate.dayOfMonth
     val dayName = actualDate.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
     val month = actualDate.monthValue
@@ -296,12 +447,10 @@ fun MyCalendar(
     val firstMonthDay = LocalDate.of(year, month, 1)
     val numberWeekDay = firstMonthDay.dayOfWeek.value
 
-    var firstDayCalendar by remember { mutableStateOf("") }
-
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 20.dp),
+            .padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -315,38 +464,71 @@ fun MyCalendar(
             weekDaysNameList.add(i.toString())
         }
 
-        Text(
-            text = "${monthName.replaceFirstChar { it.uppercase() }} $year",
-            fontWeight = FontWeight.Bold
-        )
-        WeekDayName(onDayClick = onDayClick, items = weekDaysNameList)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(
+                onClick = { onMonthChange(actualDate.minusMonths(1)) }
+            ) {
+                Icon(
+                    Icons.Filled.KeyboardDoubleArrowLeft,
+                    contentDescription = "Mes anterior"
+                )
+            }
 
-        Row(modifier = Modifier.padding(8.dp)) {
-            Spacer(modifier = Modifier.weight(1f))
-            Button(onClick = { actualDate = actualDate.minusMonths(1) }) {
-                Text("-")
+            Text(
+                text = "${monthName.replaceFirstChar { it.uppercase() }} $year",
+                fontWeight = FontWeight.Bold
+            )
+
+            IconButton(
+                onClick = { onMonthChange(actualDate.plusMonths(1)) }
+            ) {
+                Icon(
+                    Icons.Filled.KeyboardDoubleArrowRight,
+                    contentDescription = "Mes siguiente"
+                )
             }
-            Spacer(modifier = Modifier.width(16.dp))
-            Button(onClick = { actualDate = actualDate.plusMonths(1) }) {
-                Text("+")
-            }
+
         }
+
+        WeekDayName(
+            onDayClick = { dayClicked ->
+                onDayClick(dayClicked, totalMonthDays)
+            },
+            items = weekDaysNameList,
+            paymentDays = paymentDays
+        )
     }
 }
 
 @Composable
-fun WeekDayName(items: List<String>, onDayClick: (Int) -> Unit) {
+fun WeekDayName(
+    items: List<String>,
+    onDayClick: (Int) -> Unit,
+    paymentDays: List<Int>
+) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(7)
     ) {
         items(items) { item ->
+
             val isNotDigit = item.all { it.isLetter() } || item.isEmpty()
+            val dayNum = item.toIntOrNull()
+            val hasPayment = dayNum != null && paymentDays.contains(dayNum)
+
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .size(60.dp)
                     .background(
-                        color = if (isNotDigit) Color.Transparent else Color.LightGray,
+                        color = when {
+                            isNotDigit -> Color.Transparent
+                            hasPayment -> MaterialTheme.colorScheme.primary
+                            else -> MaterialTheme.colorScheme.surfaceVariant
+                        },
                         shape = if (isNotDigit) {
                             RectangleShape
                         } else {
@@ -356,9 +538,13 @@ fun WeekDayName(items: List<String>, onDayClick: (Int) -> Unit) {
                     .clickable(onClick = { onDayClick(item.toInt()) }, enabled = !isNotDigit)
             ) {
                 Text(
-                    item,
-                    Modifier.padding(vertical = 8.dp),
-                    color = if (isNotDigit) Color.Black else Color.White,
+                    text = item,
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    color = when {
+                        isNotDigit -> MaterialTheme.colorScheme.onSurface
+                        hasPayment -> MaterialTheme.colorScheme.onPrimary
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -371,11 +557,13 @@ fun WeekDayName(items: List<String>, onDayClick: (Int) -> Unit) {
 fun DayDialog(
     displayedSubscriptions: List<PayTrackItem>,
     onDismiss: () -> Unit,
-    selectedDay: Int) {
-    Dialog(onDismissRequest = { }) {
+    selectedDay: Int
+) {
+    Dialog(onDismissRequest = onDismiss) {
         Card {
             Column(
-                modifier = Modifier.background(Color.White).padding(16.dp),
+                modifier = Modifier
+                    .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text("Pagos del día $selectedDay", fontWeight = FontWeight.Bold)

@@ -1,5 +1,6 @@
 package com.nicolascarmona.paytrack
 
+import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,12 +33,14 @@ class PayTrackViewModel : ViewModel() {
 
 
     // Agregar nueva suscripción
-    fun addSubscription(name: String, description: String, day: Int, price: Float) {
+    fun addSubscription(name: String, day: Int, price: Float, color: Color, frequency: Int, timeUnit: TimeUnit) {
         val newSubscription = PayTrackItem(
             name = name,
-            description = description,
             day = day,
-            price = price
+            price = price,
+            color = color,
+            frequency = frequency,
+            timeUnit = timeUnit,
         )
         _subscriptions.value += newSubscription
     }
