@@ -1,11 +1,9 @@
-package com.nicolascarmona.paytrack
+package com.nicolascarmona.paytrack.model
 
 import androidx.compose.ui.graphics.Color
 import java.util.UUID
 
 enum class TimeUnit(val labelSingular: String, val labelPlural: String){
-    DAY("Día", "Días"),
-    WEEK("Semana", "Semanas"),
     MONTH("Mes", "Meses"),
     YEAR("Año", "Años"),
 }

@@ -64,14 +64,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.nicolascarmona.paytrack.PayTrackItem
-import com.nicolascarmona.paytrack.PayTrackViewModel
-import com.nicolascarmona.paytrack.TimeUnit
+import com.nicolascarmona.paytrack.model.PayTrackItem
+import com.nicolascarmona.paytrack.model.TimeUnit
+import com.nicolascarmona.paytrack.viewmodel.PayTrackViewModel
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.TextStyle
 import java.util.Locale
-import kotlin.math.max
 
 @RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
@@ -213,49 +212,58 @@ fun PayTrackScreen(
 fun Payments(items: List<PayTrackItem>) {
 
     val sortedItems = items.sortedWith(compareBy({ it.day }, { it.price }))
+    var totalPayments = items.map { it.price }.sum()
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(sortedItems, key = { it.id }) { item ->
+    Column() {
+        Text(
+            text = "Pago total: ${String.format("%.2f €", totalPayments)}",
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+        )
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
 
-            val isLightBackground = item.color.luminance() > 0.5f
-            val textColor = if (isLightBackground) Color.Black else Color.White
+            items(sortedItems, key = { it.id }) { item ->
 
-            val repeatText = if (item.frequency == 1) {
-                "Cada ${item.timeUnit.labelSingular.lowercase()}"
-            } else {
-                "Cada ${item.frequency} ${item.timeUnit.labelPlural.lowercase()}"
-            }
+                val isLightBackground = item.color.luminance() > 0.5f
+                val textColor = if (isLightBackground) Color.Black else Color.White
 
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = item.color
-                )
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                val repeatText = if (item.frequency == 1) {
+                    "Cada ${item.timeUnit.labelSingular.lowercase()}"
+                } else {
+                    "Cada ${item.frequency} ${item.timeUnit.labelPlural.lowercase()}"
+                }
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = item.color
+                    )
                 ) {
-                    Column {
-                        Text(item.name, fontWeight = FontWeight.Bold, color = textColor)
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(item.name, fontWeight = FontWeight.Bold, color = textColor)
+                            Text(
+                                "Día de cobro: ${item.day} ($repeatText)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = textColor.copy(alpha = 0.8f)
+                            )
+                        }
+                        Spacer(modifier = Modifier.weight(1f))
                         Text(
-                            "Día de cobro: ${item.day} ($repeatText)",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = textColor.copy(alpha = 0.8f)
+                            String.format("%.2f €", item.price),
+                            fontWeight = FontWeight.Bold,
+                            color = textColor
                         )
                     }
-                    Spacer(modifier = Modifier.weight(1f))
-                    Text(
-                        String.format("%.2f €", item.price),
-                        fontWeight = FontWeight.Bold,
-                        color = textColor
-                    )
                 }
             }
         }
@@ -373,17 +381,16 @@ fun MyDialog(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 LazyVerticalGrid(
-                    // Crea celdas de un tamaño mínimo, ajustando las columnas automáticamente
                     columns = GridCells.Adaptive(minSize = 36.dp),
-                    modifier = Modifier.height(100.dp), // Altura fija para el contenedor de la cuadrícula
+                    modifier = Modifier.height(100.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(colorList) { color ->
                         Box(
                             modifier = Modifier
-                                .aspectRatio(1f) // Fuerza a que sean cuadrados perfectos
-                                .clip(RoundedCornerShape(8.dp)) // Bordes redondeados como en la imagen
+                                .aspectRatio(1f)
+                                .clip(RoundedCornerShape(8.dp))
                                 .background(color)
                                 .clickable { onColorChange(color) }
                                 .border(
@@ -397,7 +404,6 @@ fun MyDialog(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Conversion para validaciones lógicas
                 val dayInt = dayStr.toIntOrNull() ?: 0
                 val priceFloat = priceStr.toFloatOrNull() ?: 0f
 
