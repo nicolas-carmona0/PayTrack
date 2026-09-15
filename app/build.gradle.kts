@@ -1,6 +1,10 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    // KSP para ROOM
+    id("com.google.devtools.ksp") version "2.3.11"
+    // Dagger Hilt
+    id("dagger.hilt.android.plugin")
 }
 
 android {
@@ -36,6 +40,17 @@ android {
 }
 
 dependencies {
+
+    // Dagger Hilt
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
+    implementation(libs.androidx.hilt.navigation.compose)
+
+    // ROOM
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    implementation(libs.androidx.ui.graphics)
+    ksp(libs.androidx.room.compiler)
 
     // Icons Extended
     implementation(libs.androidx.compose.material.icons.extended)

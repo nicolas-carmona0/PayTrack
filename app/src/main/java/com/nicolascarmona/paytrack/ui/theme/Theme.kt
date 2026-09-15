@@ -35,18 +35,22 @@ private val LightColorScheme = lightColorScheme(
 
 @Composable
 fun PayTrackTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
+    themeMode: ThemeMode = ThemeMode.LIGHT,
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
+    // 2. Calculamos si debe ser oscuro basándonos en el interruptor
+    val isDark = when (themeMode) {
+        ThemeMode.LIGHT -> false
+        ThemeMode.DARK -> true
+    }
+
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            if (isDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
-
-        darkTheme -> DarkColorScheme
+        isDark -> DarkColorScheme
         else -> LightColorScheme
     }
 
@@ -55,4 +59,8 @@ fun PayTrackTheme(
         typography = Typography,
         content = content
     )
+}
+
+enum class ThemeMode {
+    LIGHT, DARK
 }
