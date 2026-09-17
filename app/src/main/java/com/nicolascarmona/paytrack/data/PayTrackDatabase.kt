@@ -7,7 +7,7 @@ import com.nicolascarmona.paytrack.model.PayTrackItem
 
 // Une las tablas, el DAO y los conversores
 
-@Database(entities = [PayTrackItem::class], version = 1, exportSchema = false)
+@Database(entities = [PayTrackItem::class], version = 2, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class PayTrackDatabase : RoomDatabase(){
     abstract val dao: SubscriptionDao

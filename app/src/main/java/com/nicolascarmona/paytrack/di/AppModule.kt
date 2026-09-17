@@ -29,7 +29,9 @@ object AppModule {
             app,
             PayTrackDatabase::class.java,
             "paytrack_db"
-        ).build()
+        )
+            .fallbackToDestructiveMigration()
+            .build()
     }
 
     // Le enseñamos a Hilt cómo sacar el DAO de esa base de datos

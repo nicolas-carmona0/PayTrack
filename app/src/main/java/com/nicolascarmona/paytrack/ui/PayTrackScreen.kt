@@ -26,19 +26,20 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.KeyboardDoubleArrowLeft
 import androidx.compose.material.icons.filled.KeyboardDoubleArrowRight
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FabPosition
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -87,14 +88,24 @@ fun PayTrackScreen(
     payTrackViewModel: PayTrackViewModel = hiltViewModel()
 ) {
 
+    var specificMonthsStr by remember { mutableStateOf("") }
+
+    var startMonth by remember { mutableStateOf(LocalDate.now().monthValue) }
+    var startYear by remember { mutableStateOf(LocalDate.now().year) }
+
     val subscriptionList by payTrackViewModel.subscriptions.collectAsStateWithLifecycle()
-//    val totalMonth by payTrackViewModel.totalSpent.collectAsStateWithLifecycle()
 
     var actualDate by remember { mutableStateOf(LocalDate.now()) }
     val currentMaxMonthDays = actualDate.lengthOfMonth()
 
-    val effectiveSubscriptionList = subscriptionList.map { item ->
-        item.copy(day = minOf(item.day, currentMaxMonthDays))
+    // Filtramos usando la fecha que el usuario está mirando en el calendario (actualDate)
+    val effectiveSubscriptionList = remember(subscriptionList, actualDate) {
+        subscriptionList.filter { item ->
+            item.shouldShowIn(actualDate.monthValue, actualDate.year)
+        }.map { item ->
+            // Mantenemos tu genial lógica para los topes de días del mes
+            item.copy(day = minOf(item.day, currentMaxMonthDays))
+        }
     }
 
     val paymentDays = effectiveSubscriptionList.map { it.day }.distinct()
@@ -108,7 +119,6 @@ fun PayTrackScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var showDayDialog by remember { mutableStateOf(false) }
 
-
     var selectedDay by remember { mutableStateOf<Int?>(null) }
 
     val displayedSubscriptions = if (selectedDay != null) {
@@ -121,7 +131,8 @@ fun PayTrackScreen(
         Color(0xFFF44336), Color(0xFFE91E63), Color(0xFF9C27B0), Color(0xFF673AB7),
         Color(0xFF3F51B5), Color(0xFF2196F3), Color(0xFF03A9F4), Color(0xFF00BCD4),
         Color(0xFF009688), Color(0xFF4CAF50), Color(0xFF8BC34A), Color(0xFFCDDC39),
-        Color(0xFFFFEB3B), Color(0xFFFFC107), Color(0xFFFF9800), Color(0xFFFF5722)
+        Color(0xFFFFEB3B), Color(0xFFFFC107), Color(0xFFFF9800), Color(0xFFFF5722),
+        Color(0xFFFFFFFF), Color(0xFF000000)
     )
 
     var selectedColor by remember { mutableStateOf(colorList[0]) }
@@ -137,6 +148,9 @@ fun PayTrackScreen(
         selectedColor = colorList[0]
         frequencyStr = "1"
         timeUnit = TimeUnit.MONTH
+        startMonth = LocalDate.now().monthValue
+        startYear = LocalDate.now().year
+        specificMonthsStr = ""
     }
 
 
@@ -148,6 +162,9 @@ fun PayTrackScreen(
         dayStr = item.day.toString()
         priceStr = item.price.toString()
         selectedColor = Color(item.color)
+        startMonth = item.startMonth
+        startYear = item.startYear
+        specificMonthsStr = item.specificMonths
         showAddDialog = true
     }
 
@@ -165,7 +182,7 @@ fun PayTrackScreen(
                 ),
                 title = {
                     // El texto se alineará perfectamente a la izquierda con el margen por defecto
-                    Text("PayTrack", fontWeight = FontWeight.Bold)
+                    Text(("PayTrack"), fontWeight = FontWeight.Bold)
                 },
                 actions = {
                     ThemeSwitcher(
@@ -206,7 +223,10 @@ fun PayTrackScreen(
                 onFrequencyChange = { frequencyStr = it },
                 timeUnit = timeUnit,
                 onTimeUnitChange = { timeUnit = it },
-                editingId = editingId
+                editingId = editingId,
+                startMonth = startMonth,
+                startYear = startYear,
+                initialSpecificMonths = specificMonthsStr
             )
         }
         if (showDayDialog && selectedDay != null) {
@@ -217,7 +237,19 @@ fun PayTrackScreen(
                     selectedDay = null
                 },
                 selectedDay = selectedDay!!,
-                onEdit = openEditDialog
+                onEdit = openEditDialog,
+                onAddClick = { day ->
+                    // 1. Limpiamos cualquier dato viejo
+                    closeAndClearDialog()
+
+                    // 2. Rellenamos el día automáticamente con el que estábamos mirando
+                    dayStr = day.toString()
+
+                    // 3. Ocultamos el calendario del día y mostramos el formulario
+                    showDayDialog = false
+                    selectedDay = null
+                    showAddDialog = true
+                }
             )
         }
         Column(
@@ -326,7 +358,7 @@ fun Payments(
                         Column {
                             Text(item.name, fontWeight = FontWeight.Bold, color = textColor)
                             Text(
-                                "Día de cobro: ${item.day} ($repeatText)",
+                                "Día: ${item.day} ($repeatText)",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = textColor.copy(alpha = 0.8f)
                             )
@@ -362,15 +394,27 @@ fun MyDialog(
     selectedColor: Color,
     onColorChange: (Color) -> Unit,
     colorList: List<Color>,
-    editingId: String?
+    editingId: String?,
+    startMonth: Int,
+    startYear: Int,
+    initialSpecificMonths: String
 ) {
-
-    var expanded by remember { mutableStateOf(false) }
+    val monthsList = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")
 
     Dialog(onDismissRequest = onDismiss) {
         Card {
+            var seRepiteCadaMes by remember {
+                mutableStateOf(initialSpecificMonths.isEmpty())
+            }
+
+            var selectedMonths by remember {
+                mutableStateOf(
+                    if (initialSpecificMonths.isEmpty()) emptySet()
+                    else initialSpecificMonths.split(",").mapNotNull { it.toIntOrNull() }.toSet()
+                )
+            }
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Nombre")
+                Text("Nombre", fontWeight = FontWeight.SemiBold)
                 OutlinedTextField(
                     value = name,
                     onValueChange = onNameChange,
@@ -378,7 +422,7 @@ fun MyDialog(
                 )
                 Spacer(modifier = Modifier.height(10.dp))
 
-                Text("Día")
+                Text("Día", fontWeight = FontWeight.SemiBold)
                 OutlinedTextField(
                     value = dayStr,
                     onValueChange = {
@@ -391,7 +435,7 @@ fun MyDialog(
                 )
                 Spacer(modifier = Modifier.height(10.dp))
 
-                Text("Precio")
+                Text("Precio", fontWeight = FontWeight.SemiBold)
                 OutlinedTextField(
                     value = priceStr,
                     onValueChange = { onPriceStrChange(it.replace(',', '.')) },
@@ -400,51 +444,54 @@ fun MyDialog(
                 )
                 Spacer(modifier = Modifier.height(10.dp))
 
-                Text("Se repite cada:")
-                Spacer(modifier = Modifier.height(8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    OutlinedTextField(
-                        value = frequencyStr,
-                        onValueChange = {
-                            if (it.isEmpty() || it.all { char -> char.isDigit() }) onFrequencyChange(
-                                it
-                            )
-                        },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.weight(1f) // Ocupa menos espacio
+                    Text("¿Se repite cada mes?", fontWeight = FontWeight.SemiBold)
+                    Checkbox(
+                        checked = seRepiteCadaMes,
+                        onCheckedChange = { seRepiteCadaMes = it }
                     )
-
-                    ExposedDropdownMenuBox(
-                        expanded = expanded,
-                        onExpandedChange = { expanded = !expanded },
-                        modifier = Modifier.weight(2f) // Ocupa el doble de espacio
+                }
+                if (!seRepiteCadaMes) {
+                    Text("Meses de pago específico:", fontWeight = FontWeight.SemiBold)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(6),
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        val isPlural = (frequencyStr.toIntOrNull() ?: 0) != 1
+                        items(monthsList.size) { index ->
+                            val monthNumber = index + 1
+                            val isSelected = selectedMonths.contains(monthNumber)
 
-                        OutlinedTextField(
-                            value = if (isPlural) timeUnit.labelPlural else timeUnit.labelSingular,
-                            onValueChange = {},
-                            readOnly = true,
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                            modifier = Modifier
-                                .menuAnchor()
-                                .fillMaxWidth()
-                        )
-                        ExposedDropdownMenu(
-                            expanded = expanded,
-                            onDismissRequest = { expanded = false }
-                        ) {
-                            TimeUnit.entries.forEach { option ->
-                                DropdownMenuItem(
-                                    text = { Text(if (isPlural) option.labelPlural else option.labelSingular) },
-                                    onClick = {
-                                        onTimeUnitChange(option)
-                                        expanded = false
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .aspectRatio(1f) // Mantiene las celdas cuadradas
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.background)
+                                    .clickable {
+                                        selectedMonths = if (isSelected) {
+                                            selectedMonths - monthNumber // Lo desmarca
+                                        } else {
+                                            selectedMonths + monthNumber // Lo marca
+                                        }
                                     }
+                                    .border(
+                                        width = if (isSelected) 3.dp else 0.dp,
+                                        color = if (isSelected) MaterialTheme.colorScheme.onSurface else Color.Transparent,
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                            ) {
+                                Text(
+                                    text = monthsList[index],
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                 )
                             }
                         }
@@ -452,7 +499,7 @@ fun MyDialog(
                 }
                 Spacer(modifier = Modifier.height(10.dp))
 
-                Text("Color identificativo")
+                Text("Color identificativo", fontWeight = FontWeight.SemiBold)
                 Spacer(modifier = Modifier.height(8.dp))
 
                 LazyVerticalGrid(
@@ -482,7 +529,14 @@ fun MyDialog(
                 val dayInt = dayStr.toIntOrNull() ?: 0
                 val priceFloat = priceStr.toFloatOrNull() ?: 0f
 
-                Row(modifier = Modifier.fillMaxWidth()) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+
+                    Button(onClick = onDismiss) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Atrás"
+                        )
+                    }
 
                     if (editingId != null) {
                         TextButton(
@@ -492,27 +546,35 @@ fun MyDialog(
                                 onDismiss()
                             },
                             colors = ButtonDefaults.textButtonColors(contentColor = Color.Red)
-                        ) { Text("Eliminar") }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.DeleteForever,
+                                contentDescription = "Eliminar"
+                            )
+                        }
                     }
-
-                    Spacer(modifier = Modifier.weight(1f))
-                    Button(onClick = onDismiss) { Text("Atrás") }
-                    Spacer(modifier = Modifier.width(10.dp))
 
                     val freqInt = frequencyStr.toIntOrNull() ?: 1
 
                     Button(
                         onClick = {
+                            // Convertimos los meses seleccionados a un texto (ej: "1,5,12") para poder guardarlo en Room luego
+                            val specificMonthsString =
+                                if (seRepiteCadaMes) "" else selectedMonths.joinToString(",")
+
                             // 1. Construimos el objeto aquí mismo
                             val newItem = PayTrackItem(
-                                id = editingId ?: UUID.randomUUID()
-                                    .toString(), // Mantiene el id si editamos
+                                id = editingId ?: UUID.randomUUID().toString(),
                                 name = name,
-                                frequency = freqInt,
-                                timeUnit = timeUnit,
                                 day = dayInt,
                                 price = priceFloat,
-                                color = selectedColor.toArgb()
+                                color = selectedColor.toArgb(),
+                                startMonth = startMonth,
+                                startYear = startYear,
+                                // Dejamos estos por defecto ya que eliminamos la UI
+                                frequency = 1,
+                                timeUnit = TimeUnit.MONTH,
+                                specificMonths = specificMonthsString
                             )
 
                             // 2. Decidimos si actualizamos o creamos uno nuevo
@@ -525,7 +587,9 @@ fun MyDialog(
                             onDismiss()
                         },
                         enabled = name.isNotBlank() && freqInt > 0 && dayInt in 1..31 && priceFloat > 0f
-                    ) { Text("Guardar") }
+                    ) {
+                        Icon(imageVector = Icons.Filled.Save, contentDescription = "Guardar")
+                    }
                 }
             }
         }
@@ -669,7 +733,6 @@ fun WeekDayName(
                     fontWeight = FontWeight.Bold
                 )
             }
-
         }
     }
 }
@@ -679,14 +742,15 @@ fun DayDialog(
     displayedSubscriptions: List<PayTrackItem>,
     onDismiss: () -> Unit,
     selectedDay: Int,
-    onEdit: (PayTrackItem) -> Unit
+    onEdit: (PayTrackItem) -> Unit,
+    onAddClick: (Int) -> Unit
 ) {
     Dialog(onDismissRequest = onDismiss) {
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(8.dp),
+                    .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text("Pagos del día $selectedDay", fontWeight = FontWeight.Bold)
@@ -706,11 +770,21 @@ fun DayDialog(
                 }
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Button(
-                    onClick = onDismiss,
-                    modifier = Modifier.align(Alignment.End)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Cerrar")
+                    Button(
+                        onClick = onDismiss
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Atrás"
+                        )
+                    }
+                    Button(onClick = { onAddClick(selectedDay) }) {
+                        Icon(Icons.Filled.Add, contentDescription = "Añadir")
+                    }
                 }
             }
         }
@@ -722,8 +796,7 @@ fun ThemeSwitcher(
     currentTheme: ThemeMode,
     onThemeSelected: (ThemeMode) -> Unit
 ) {
-    // Envolvemos el interruptor en un Row para centrarlo en la pantalla
-
+    // Envolvemos interruptor en un Row para centrarlo en la pantalla
     Row(
         modifier = Modifier
             .width(120.dp) // Tamaño compacto para 2 iconos
@@ -756,5 +829,30 @@ fun ThemeSwitcher(
             }
         }
     }
+}
 
+fun PayTrackItem.shouldShowIn(targetMonth: Int, targetYear: Int): Boolean {
+    // 1. Calculamos el tiempo absoluto en meses
+    val startAbsoluteMonths = (startYear * 12) + startMonth
+    val targetAbsoluteMonths = (targetYear * 12) + targetMonth
+
+    // 2. LA BARRERA DEL TIEMPO: Si el mes/año del calendario es anterior a cuando
+    // se creó el pago, NUNCA se muestra (sea el tipo de pago que sea).
+    if (targetAbsoluteMonths < startAbsoluteMonths) return false
+
+    // 3. Si hay meses específicos definidos, comprobamos si el mes coincide
+    if (specificMonths.isNotEmpty()) {
+        val mesesElegidos = specificMonths.split(",").mapNotNull { it.toIntOrNull() }
+        return mesesElegidos.contains(targetMonth)
+    }
+
+    // 4. Si es un pago normal recurrente (cada X meses), usamos la lógica matemática
+    val monthsBetween = targetAbsoluteMonths - startAbsoluteMonths
+
+    val cycleInMonths = when (timeUnit) {
+        TimeUnit.MONTH -> frequency
+        TimeUnit.YEAR -> frequency * 12
+    }
+
+    return monthsBetween % cycleInMonths == 0
 }

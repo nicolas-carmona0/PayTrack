@@ -15,10 +15,14 @@ data class PayTrackItem(
     @PrimaryKey
     val id: String = UUID.randomUUID().toString(),
 
+    val startMonth: Int,
+    val startYear: Int,
+
     val name: String,
     val day: Int,
     val price: Float,
     val color: Int,
     val frequency: Int,
-    val timeUnit: TimeUnit
+    val timeUnit: TimeUnit,
+    val specificMonths: String
 )
