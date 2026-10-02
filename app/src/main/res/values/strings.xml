@@ -1,3 +1,51 @@
 <resources>
     <string name="app_name">PayTrack</string>
+
+    <!-- Títulos y Textos Generales -->
+    <string name="app_title">PayTrack</string>
+    <string name="add_description">Añadir</string>
+    <string name="back_description">Atrás</string>
+    <string name="delete_description">Eliminar</string>
+    <string name="save_description">Guardar</string>
+
+    <!-- Resumen de Pagos -->
+    <string name="paid_amount">Pagado: %1$s</string>
+    <string name="remaining_amount">Restante: %1$s</string>
+    <string name="total_payment">Pago total: %1$s</string>
+    <string name="price_format">%.2f €</string>
+
+    <!-- Frecuencia en Listado -->
+    <string name="every_singular">Cada %1$s</string>
+    <string name="every_plural">Cada %1$d %2$s</string>
+    <string name="day_repeat">Día: %1$d (%2$s)</string>
+
+    <!-- Formulario MyDialog -->
+    <string name="name_label">Nombre</string>
+    <string name="day_label">Día</string>
+    <string name="price_label">Precio</string>
+    <string name="payment_frequency">Frecuencia de pago</string>
+    <string name="monthly">Mensual</string>
+    <string name="specific">Flexible</string>
+    <string name="unique">Único</string>
+    <string name="select_months">Selecciona los meses:</string>
+    <string name="identifying_color">Color identificativo</string>
+
+    <!-- Calendario -->
+    <string name="previous_month">Mes anterior</string>
+    <string name="next_month">Mes siguiente</string>
+    <string name="day_l">L</string>
+    <string name="day_m">M</string>
+    <string name="day_x">X</string>
+    <string name="day_j">J</string>
+    <string name="day_v">V</string>
+    <string name="day_s">S</string>
+    <string name="day_d">D</string>
+
+    <!-- Diálogo de Días -->
+    <string name="payments_for_day">Pagos del día %1$d</string>
+    <string name="no_payments_for_this_day">No hay pagos para este día.</string>
+
+    <!-- Selector de Tema -->
+    <string name="light_mode">Modo Claro</string>
+    <string name="dark_mode">Modo Oscuro</string>
 </resources>
