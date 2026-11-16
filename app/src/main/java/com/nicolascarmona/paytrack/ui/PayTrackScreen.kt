@@ -2,10 +2,14 @@ package com.nicolascarmona.paytrack.ui
 
 import android.annotation.SuppressLint
 import android.os.Build
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,17 +40,20 @@ import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.KeyboardDoubleArrowLeft
 import androidx.compose.material.icons.filled.KeyboardDoubleArrowRight
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FabPosition
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -68,6 +75,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -86,6 +94,7 @@ import java.time.LocalDate
 import java.time.format.TextStyle
 import java.util.UUID
 
+@SuppressLint("LocalContextGetResourceValueCall")
 @RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -97,8 +106,12 @@ fun PayTrackScreen(
     var specificMonthsStr by remember { mutableStateOf("") }
     var startMonth by remember { mutableIntStateOf(LocalDate.now().monthValue) }
     var startYear by remember { mutableIntStateOf(LocalDate.now().year) }
+    var categoryStr by remember { mutableStateOf("General") }
+    var isIncomeState by remember { mutableStateOf(false) }
 
     val subscriptionList by payTrackViewModel.subscriptions.collectAsStateWithLifecycle()
+    val monthlyGoal by payTrackViewModel.monthlySavingsGoal.collectAsStateWithLifecycle()
+
     var actualDate by remember { mutableStateOf(LocalDate.now()) }
     val currentMaxMonthDays = actualDate.lengthOfMonth()
 
@@ -120,6 +133,7 @@ fun PayTrackScreen(
 
     var showAddDialog by remember { mutableStateOf(false) }
     var showDayDialog by remember { mutableStateOf(false) }
+    var showMonthlyGoalDialog by remember { mutableStateOf(false) }
     var selectedDay by remember { mutableStateOf<Int?>(null) }
 
     val displayedSubscriptions = if (selectedDay != null) {
@@ -151,6 +165,8 @@ fun PayTrackScreen(
         startMonth = LocalDate.now().monthValue
         startYear = LocalDate.now().year
         specificMonthsStr = ""
+        categoryStr = "General"
+        isIncomeState = false
     }
 
     val openEditDialog = { item: PayTrackItem ->
@@ -164,11 +180,80 @@ fun PayTrackScreen(
         startMonth = item.startMonth
         startYear = item.startYear
         specificMonthsStr = item.specificMonths
+        categoryStr = item.category
+        isIncomeState = item.isIncome
         showAddDialog = true
     }
 
     val realToday = LocalDate.now()
-    val isCurrentMonth = actualDate.year == realToday.year && actualDate.monthValue == realToday.monthValue
+    val isCurrentMonth =
+        actualDate.year == realToday.year && actualDate.monthValue == realToday.monthValue
+
+    val context = LocalContext.current
+    var showBackupMenu by remember { mutableStateOf(false) }
+
+    val createBackupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        uri?.let {
+            payTrackViewModel.exportBackupJson { jsonString ->
+                try {
+                    context.contentResolver.openOutputStream(it)?.use { outputStream ->
+                        outputStream.write(jsonString.toByteArray())
+                    }
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.backup_exported_ok),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } catch (e: Exception) {
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.backup_error),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+    }
+
+    val restoreBackupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let {
+            try {
+                val jsonString =
+                    context.contentResolver.openInputStream(it)?.bufferedReader()?.use { reader ->
+                        reader.readText()
+                    }
+                if (!jsonString.isNullOrBlank()) {
+                    payTrackViewModel.importBackupJson(
+                        jsonString = jsonString,
+                        onSuccess = {
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.backup_restored_ok),
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        },
+                        onError = {
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.backup_error),
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    )
+                }
+            } catch (e: Exception) {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.backup_error),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -182,13 +267,55 @@ fun PayTrackScreen(
                 },
                 actions = {
                     ThemeSwitcher(currentTheme = currentTheme, onThemeSelected = onThemeChange)
-                    Spacer(modifier = Modifier.width(16.dp))
+                    Box {
+                        IconButton(onClick = { showBackupMenu = true }) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = stringResource(R.string.backup_menu_description)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showBackupMenu,
+                            onDismissRequest = { showBackupMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.savings_goal_menu)) },
+                                onClick = {
+                                    showBackupMenu = false
+                                    showMonthlyGoalDialog = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.export_backup)) },
+                                onClick = {
+                                    showBackupMenu = false
+                                    val fileName = "PayTrack_Backup_${LocalDate.now()}.json"
+                                    createBackupLauncher.launch(fileName)
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.import_backup)) },
+                                onClick = {
+                                    showBackupMenu = false
+                                    restoreBackupLauncher.launch(arrayOf("application/json"))
+                                }
+                            )
+                        }
+                    }
                 }
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showAddDialog = true }) {
-                Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_description))
+            FloatingActionButton(
+                onClick = {
+                    closeAndClearDialog()
+                    showAddDialog = true
+                }
+            ) {
+                Icon(
+                    Icons.Filled.Add,
+                    contentDescription = stringResource(R.string.add_description)
+                )
             }
         },
         floatingActionButtonPosition = FabPosition.Center
@@ -213,7 +340,9 @@ fun PayTrackScreen(
                 editingId = editingId,
                 startMonth = startMonth,
                 startYear = startYear,
-                initialSpecificMonths = specificMonthsStr
+                initialSpecificMonths = specificMonthsStr,
+                initialCategory = categoryStr,
+                initialIsIncome = isIncomeState
             )
         }
         if (showDayDialog && selectedDay != null) {
@@ -234,6 +363,14 @@ fun PayTrackScreen(
                 }
             )
         }
+        if (showMonthlyGoalDialog) {
+            MonthlyGoalDialog(
+                currentGoal = monthlyGoal,
+                onDismiss = { showMonthlyGoalDialog = false },
+                onSave = { newGoal -> payTrackViewModel.setMonthlySavingsGoal(newGoal) }
+            )
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -256,6 +393,7 @@ fun PayTrackScreen(
                 onEdit = openEditDialog,
                 isCurrentMonth = isCurrentMonth,
                 currentDay = realToday.dayOfMonth,
+                monthlyGoal = monthlyGoal,
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
         }
@@ -269,44 +407,172 @@ fun Payments(
     onEdit: (PayTrackItem) -> Unit,
     isCurrentMonth: Boolean = false,
     currentDay: Int = 0,
-    modifier: Modifier
+    monthlyGoal: Float = 0f,
+    modifier: Modifier,
+    showCategoryFilter: Boolean = true
 ) {
-    val sortedItems = items.sortedWith(compareBy({ it.day }, { it.price }))
-    val totalPayments = items.map { it.price }.sum()
+    val allLabel = stringResource(R.string.all_categories)
+    var selectedCategoryFilter by remember { mutableStateOf(allLabel) }
+
+    val availableCategories = remember(items, allLabel) {
+        listOf(allLabel) + items.map { it.category }.distinct().sorted()
+    }
+
+    val activeFilter = if (availableCategories.contains(selectedCategoryFilter)) {
+        selectedCategoryFilter
+    } else {
+        allLabel
+    }
+
+    val filteredItems = remember(items, activeFilter, allLabel) {
+        if (activeFilter == allLabel) items
+        else items.filter { it.category == activeFilter }
+    }
+
+    val sortedItems = filteredItems.sortedWith(compareBy({ it.day }, { it.price }))
+    val totalIncome = filteredItems.filter { it.isIncome }.sumOf { it.price.toDouble() }.toFloat()
+    val totalExpense = filteredItems.filter { !it.isIncome }.sumOf { it.price.toDouble() }.toFloat()
+    val netBalance = totalIncome - totalExpense
     val priceFormat = stringResource(R.string.price_format)
 
     Column {
+        if (showCategoryFilter && availableCategories.size > 2) {
+            Row(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                availableCategories.forEach { categoryName ->
+                    val isSelected = activeFilter == categoryName
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                            .clickable { selectedCategoryFilter = categoryName }
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = categoryName,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
+        // Ingresos vs Gastos
+        Row(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(bottom = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = stringResource(R.string.income_total, String.format(priceFormat, totalIncome)),
+                color = Color(0xFF4CAF50),
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = stringResource(R.string.expense_total, String.format(priceFormat, totalExpense)),
+                color = Color(0xFFE53935),
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+
         if (isCurrentMonth) {
-            val paidAmount = items.filter { it.day <= currentDay }.map { it.price }.sum()
-            val remainingAmount = totalPayments - paidAmount
+            val paidExpenses = filteredItems.filter { !it.isIncome && it.day <= currentDay }
+                .sumOf { it.price.toDouble() }.toFloat()
+            val remainingExpenses = totalExpense - paidExpenses
 
             Row(
                 modifier = modifier
                     .fillMaxWidth()
-                    .padding(bottom = 8.dp),
+                    .padding(bottom = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = stringResource(R.string.paid_amount, String.format(priceFormat, paidAmount)),
+                    text = stringResource(R.string.paid_amount, String.format(priceFormat, paidExpenses)),
                     color = Color(0xFF4CAF50),
-                    fontWeight = FontWeight.SemiBold
+                    style = MaterialTheme.typography.bodySmall
                 )
                 Text(
-                    text = stringResource(R.string.remaining_amount, String.format(priceFormat, remainingAmount)),
+                    text = stringResource(R.string.remaining_amount, String.format(priceFormat, remainingExpenses)),
                     color = Color(0xFFE53935),
-                    fontWeight = FontWeight.SemiBold
+                    style = MaterialTheme.typography.bodySmall
                 )
             }
         }
+
         Row(
             modifier = modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.Center
         ) {
             Text(
-                text = stringResource(R.string.total_payment, String.format(priceFormat, totalPayments)),
+                text = stringResource(R.string.net_balance, String.format(priceFormat, netBalance)),
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(vertical = 8.dp)
+                modifier = Modifier.padding(vertical = 4.dp)
             )
+        }
+
+        // --- BARRA DE OBJETIVO DE AHORRO MENSUAL ---
+        if (showCategoryFilter && monthlyGoal > 0f && activeFilter == allLabel) {
+            val progress = (netBalance / monthlyGoal).coerceIn(0f, 1f)
+            val isGoalMet = netBalance >= monthlyGoal
+            val progressColor = if (isGoalMet) Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary
+
+            Column(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = stringResource(
+                            R.string.savings_goal_progress,
+                            String.format(priceFormat, netBalance),
+                            String.format(priceFormat, monthlyGoal)
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = if (isGoalMet) {
+                            stringResource(
+                                R.string.savings_goal_achieved,
+                                String.format(priceFormat, netBalance - monthlyGoal)
+                            )
+                        } else {
+                            stringResource(
+                                R.string.savings_goal_remaining,
+                                String.format(priceFormat, monthlyGoal - netBalance)
+                            )
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = progressColor,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(50)),
+                    color = progressColor
+                )
+            }
         }
 
         LazyColumn(
@@ -318,10 +584,18 @@ fun Payments(
                 val isLightBackground = composeColor.luminance() > 0.5f
                 val textColor = if (isLightBackground) Color.Black else Color.White
 
-                val repeatText = if (item.frequency == 1) {
-                    stringResource(R.string.every_singular, item.timeUnit.labelSingular.lowercase())
+                val repeatText = when {
+                    item.specificMonths == "UNIQUE" -> stringResource(R.string.unique)
+                    item.specificMonths.isNotEmpty() -> stringResource(R.string.specific)
+                    item.frequency == 1 && item.timeUnit == TimeUnit.MONTH -> stringResource(R.string.monthly)
+                    item.frequency == 1 -> stringResource(R.string.every_singular, item.timeUnit.labelSingular)
+                    else -> stringResource(R.string.every_plural, item.frequency, item.timeUnit.labelPlural)
+                }.lowercase()
+
+                val formattedAmount = if (item.isIncome) {
+                    "+${String.format(priceFormat, item.price)}"
                 } else {
-                    stringResource(R.string.every_plural, item.frequency, item.timeUnit.labelPlural.lowercase())
+                    String.format(priceFormat, item.price)
                 }
 
                 Card(
@@ -346,7 +620,12 @@ fun Payments(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = stringResource(R.string.day_repeat, item.day, repeatText),
+                                text = stringResource(
+                                    R.string.days_repeat,
+                                    item.day,
+                                    repeatText,
+                                    item.category
+                                ),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = textColor.copy(alpha = 0.8f),
                                 maxLines = 1,
@@ -354,10 +633,76 @@ fun Payments(
                             )
                         }
                         Text(
-                            text = String.format(priceFormat, item.price),
+                            text = formattedAmount,
                             fontWeight = FontWeight.Bold,
                             color = textColor,
                             maxLines = 1
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MonthlyGoalDialog(
+    currentGoal: Float,
+    onDismiss: () -> Unit,
+    onSave: (Float) -> Unit
+) {
+    var goalStr by remember {
+        mutableStateOf(if (currentGoal > 0f) currentGoal.toString() else "")
+    }
+    val goalFloat = goalStr.toFloatOrNull() ?: 0f
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.savings_goal_dialog_title),
+                    fontWeight = FontWeight.Bold
+                )
+                OutlinedTextField(
+                    value = goalStr,
+                    onValueChange = { goalStr = it.replace(',', '.') },
+                    placeholder = { Text(stringResource(R.string.savings_goal_hint)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (currentGoal > 0f) {
+                        TextButton(
+                            onClick = {
+                                onSave(0f)
+                                onDismiss()
+                            },
+                            colors = ButtonDefaults.textButtonColors(contentColor = Color.Red)
+                        ) {
+                            Text(stringResource(R.string.savings_goal_disable))
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.width(1.dp))
+                    }
+
+                    Button(
+                        onClick = {
+                            onSave(goalFloat)
+                            onDismiss()
+                        },
+                        enabled = goalFloat > 0f
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Save,
+                            contentDescription = stringResource(R.string.save_description)
                         )
                     }
                 }
@@ -387,11 +732,17 @@ fun MyDialog(
     editingId: String?,
     startMonth: Int,
     startYear: Int,
-    initialSpecificMonths: String
+    initialSpecificMonths: String,
+    initialCategory: String = "General",
+    initialIsIncome: Boolean = false
 ) {
+    val categoryList by payTrackViewModel.categories.collectAsStateWithLifecycle()
+    var selectedCategory by remember { mutableStateOf(initialCategory.ifEmpty { "General" }) }
+    var isIncome by remember { mutableStateOf(initialIsIncome) }
+    var showManageCategoriesDialog by remember { mutableStateOf(false) }
+
     val monthsList = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")
 
-    // Obtenemos los strings para el control segmentado
     val strMonthly = stringResource(R.string.monthly)
     val strUnique = stringResource(R.string.unique)
     val strSpecific = stringResource(R.string.specific)
@@ -431,6 +782,35 @@ fun MyDialog(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val types = listOf(
+                            false to stringResource(R.string.expense_type),
+                            true to stringResource(R.string.income_type)
+                        )
+                        types.forEach { (incomeFlag, label) ->
+                            val isSelected = isIncome == incomeFlag
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                                    .clickable { isIncome = incomeFlag }
+                                    .padding(vertical = 10.dp)
+                            ) {
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+
                     Text(stringResource(R.string.name_label), fontWeight = FontWeight.SemiBold)
                     OutlinedTextField(
                         value = name,
@@ -456,7 +836,50 @@ fun MyDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    Text(stringResource(R.string.payment_frequency), fontWeight = FontWeight.SemiBold)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            stringResource(R.string.category_label),
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        TextButton(onClick = { showManageCategoriesDialog = true }) {
+                            Text(stringResource(R.string.manage_categories))
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        categoryList.forEach { cat ->
+                            val isSelected = selectedCategory == cat.name
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                                    .clickable { selectedCategory = cat.name }
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                            ) {
+                                Text(
+                                    text = cat.name,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+
+                    Text(
+                        stringResource(R.string.payment_frequency),
+                        fontWeight = FontWeight.SemiBold
+                    )
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -486,7 +909,10 @@ fun MyDialog(
                     }
 
                     if (paymentType == strSpecific) {
-                        Text(stringResource(R.string.select_months), fontWeight = FontWeight.SemiBold)
+                        Text(
+                            stringResource(R.string.select_months),
+                            fontWeight = FontWeight.SemiBold
+                        )
 
                         Column(
                             modifier = Modifier.fillMaxWidth(),
@@ -534,7 +960,10 @@ fun MyDialog(
                         }
                     }
 
-                    Text(stringResource(R.string.identifying_color), fontWeight = FontWeight.SemiBold)
+                    Text(
+                        stringResource(R.string.identifying_color),
+                        fontWeight = FontWeight.SemiBold
+                    )
 
                     Column(
                         modifier = Modifier.fillMaxWidth(),
@@ -620,7 +1049,9 @@ fun MyDialog(
                                 startYear = startYear,
                                 frequency = 1,
                                 timeUnit = TimeUnit.MONTH,
-                                specificMonths = specificMonthsString
+                                specificMonths = specificMonthsString,
+                                category = selectedCategory,
+                                isIncome = isIncome
                             )
 
                             if (editingId != null) {
@@ -633,7 +1064,85 @@ fun MyDialog(
                         },
                         enabled = name.isNotBlank() && dayInt in 1..31 && priceFloat > 0f && (paymentType != strSpecific || selectedMonths.isNotEmpty())
                     ) {
-                        Icon(imageVector = Icons.Filled.Save, contentDescription = stringResource(R.string.save_description))
+                        Icon(
+                            imageVector = Icons.Filled.Save,
+                            contentDescription = stringResource(R.string.save_description)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    if (showManageCategoriesDialog) {
+        var newCategoryName by remember { mutableStateOf("") }
+
+        Dialog(onDismissRequest = { showManageCategoriesDialog = false }) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(stringResource(R.string.manage_categories), fontWeight = FontWeight.Bold)
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = newCategoryName,
+                            onValueChange = { newCategoryName = it },
+                            placeholder = { Text(stringResource(R.string.new_category_hint)) },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(
+                            onClick = {
+                                payTrackViewModel.addCategory(newCategoryName)
+                                selectedCategory = newCategoryName.trim()
+                                newCategoryName = ""
+                            },
+                            enabled = newCategoryName.isNotBlank()
+                        ) {
+                            Icon(
+                                Icons.Default.Add,
+                                contentDescription = stringResource(R.string.add_description)
+                            )
+                        }
+                    }
+
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        categoryList.forEach { cat ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(cat.name)
+                                if (cat.name != "General") {
+                                    IconButton(
+                                        onClick = {
+                                            if (selectedCategory == cat.name) selectedCategory = "General"
+                                            payTrackViewModel.deleteCategory(cat)
+                                        }
+                                    ) {
+                                        Icon(
+                                            Icons.Default.DeleteForever,
+                                            contentDescription = stringResource(R.string.delete_description),
+                                            tint = Color.Red
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Button(
+                        onClick = { showManageCategoriesDialog = false },
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        Text(stringResource(R.string.close_button))
                     }
                 }
             }
@@ -815,7 +1324,8 @@ fun DayDialog(
                             onEdit(it)
                             onDismiss()
                         },
-                        modifier = Modifier
+                        modifier = Modifier,
+                        showCategoryFilter = false
                     )
                 }
                 Spacer(modifier = Modifier.height(16.dp))
@@ -831,7 +1341,10 @@ fun DayDialog(
                         )
                     }
                     Button(onClick = { onAddClick(selectedDay) }) {
-                        Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_description))
+                        Icon(
+                            Icons.Filled.Add,
+                            contentDescription = stringResource(R.string.add_description)
+                        )
                     }
                 }
             }
@@ -857,7 +1370,10 @@ fun ThemeSwitcher(
 
         options.forEach { (mode, icon) ->
             val isSelected = currentTheme == mode
-            val modeDescription = if (mode == ThemeMode.LIGHT) stringResource(R.string.light_mode) else stringResource(R.string.dark_mode)
+            val modeDescription =
+                if (mode == ThemeMode.LIGHT) stringResource(R.string.light_mode) else stringResource(
+                    R.string.dark_mode
+                )
 
             Box(
                 modifier = Modifier
@@ -884,7 +1400,7 @@ fun PayTrackItem.shouldShowIn(targetMonth: Int, targetYear: Int): Boolean {
 
     if (targetAbsoluteMonths < startAbsoluteMonths) return false
 
-    if (specificMonths == "UNIQUE"){
+    if (specificMonths == "UNIQUE") {
         return targetAbsoluteMonths == startAbsoluteMonths
     }
 

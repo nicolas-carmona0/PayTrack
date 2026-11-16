@@ -4,7 +4,7 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 import java.util.UUID
 
-enum class TimeUnit(val labelSingular: String, val labelPlural: String){
+enum class TimeUnit(val labelSingular: String, val labelPlural: String) {
     MONTH("Mes", "Meses"),
     YEAR("Año", "Años"),
 }
@@ -24,5 +24,12 @@ data class PayTrackItem(
     val color: Int,
     val frequency: Int,
     val timeUnit: TimeUnit,
-    val specificMonths: String
+    val specificMonths: String,
+    val category: String = "General",
+    val isIncome: Boolean = false
+)
+
+@Entity(tableName = "categories")
+data class CategoryItem(
+    @PrimaryKey val name: String
 )

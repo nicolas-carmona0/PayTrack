@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import com.nicolascarmona.paytrack.model.CategoryItem
 import com.nicolascarmona.paytrack.model.PayTrackItem
 import kotlinx.coroutines.flow.Flow
 
@@ -31,4 +32,25 @@ interface SubscriptionDao {
     @Query("SELECT * FROM subscriptions WHERE day = :todayDay")
     fun getSubscriptionsForDay(todayDay: Int): List<PayTrackItem>
 
+    @Query("SELECT * FROM subscriptions")
+    fun getAllSubscriptionList(): List<PayTrackItem>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insertAll(items: List<PayTrackItem>): List<Long>
+
+
+    @Query("SELECT * FROM categories ORDER BY name ASC")
+    fun getAllCategories(): Flow<List<CategoryItem>>
+
+    @Query("SELECT * FROM categories ORDER BY name ASC")
+    fun getAllCategoriesList(): List<CategoryItem>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    fun insertCategory(category: CategoryItem)
+
+    @Delete
+    fun deleteCategory(category: CategoryItem)
+
+    @Query("UPDATE subscriptions SET category = 'General' WHERE category = :deletedCategoryName")
+    fun resetCategoryToDefault(deletedCategoryName: String)
 }

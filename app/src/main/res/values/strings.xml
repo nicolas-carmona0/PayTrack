@@ -48,4 +48,36 @@
     <!-- Selector de Tema -->
     <string name="light_mode">Modo Claro</string>
     <string name="dark_mode">Modo Oscuro</string>
+
+    <!-- Copia de seguridad -->
+    <string name="backup_menu_description">Copia de seguridad</string>
+    <string name="export_backup">Exportar copia</string>
+    <string name="import_backup">Restaurar copia</string>
+    <string name="backup_exported_ok">Copia de seguridad guardada</string>
+    <string name="backup_restored_ok">Datos restaurados correctamente</string>
+    <string name="backup_error">Error al procesar el archivo</string>
+
+    <!-- Categorías -->
+    <string name="category_label">Categoría</string>
+    <string name="manage_categories">Gestionar</string>
+    <string name="new_category_hint">Nueva categoría</string>
+    <string name="close_button">Cerrar</string>
+    <string name="days_repeat">Día: %1$d (%2$s) • %3$s</string>
+    <string name="all_categories">Todas</string>
+
+    <!-- Tipo de acción (Gasto / Ingreso) y Balance -->
+    <string name="expense_type">Gasto</string>
+    <string name="income_type">Ingreso</string>
+    <string name="income_total">Ingresos: %1$s</string>
+    <string name="expense_total">Gastos: %1$s</string>
+    <string name="net_balance">Balance: %1$s</string>
+
+    <!-- Objetivo de ahorro mensual -->
+    <string name="savings_goal_menu">Objetivo de ahorro mensual</string>
+    <string name="savings_goal_dialog_title">Objetivo de ahorro mensual</string>
+    <string name="savings_goal_hint">Ej: 300 (€)</string>
+    <string name="savings_goal_progress">Ahorro: %1$s / %2$s</string>
+    <string name="savings_goal_achieved">¡Objetivo cumplido! (+%1$s extra)</string>
+    <string name="savings_goal_remaining">Faltan %1$s para el objetivo</string>
+    <string name="savings_goal_disable">Quitar objetivo</string>
 </resources>

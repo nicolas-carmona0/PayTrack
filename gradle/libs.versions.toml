@@ -1,7 +1,8 @@
 [versions]
-agp = "9.4.0"
+agp = "9.5.1"
 androidxMaterialZVersion = "1.11.4"
 coreKtx = "1.10.1"
+gson = "2.15.0"
 hiltAndroid = "2.60.1"
 hiltCompiler = "2.60.1"
 hiltNavigationCompose = "1.4.0"
@@ -28,6 +29,8 @@ androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-
 androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "roomCompiler" }
 androidx-room-ktx = { module = "androidx.room:room-ktx", version.ref = "roomKtx" }
 androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "roomRuntime" }
+androidx-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4" }
+gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
 hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "hiltAndroid" }
 hilt-compiler = { module = "com.google.dagger:hilt-compiler", version.ref = "hiltCompiler" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
